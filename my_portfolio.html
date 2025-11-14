@@ -1,0 +1,653 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tanjib Sadat  | Data Analyst Portfolio</title>
+    <!-- Load Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Load AOS (Animate On Scroll) Library -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/aos/2.3.4/aos.css" />
+    <!-- Load Poppins Font -->
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@100;200;300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    
+    <!-- Firebase SDK Imports (must be type="module") -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, addDoc, setLogLevel, doc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // Global Firebase variables
+        window.db = null;
+        window.auth = null;
+        window.userId = null;
+        window.isAuthReady = false;
+        // Expose onAuthStateChanged globally for non-module scripts
+        window.onAuthStateChanged = onAuthStateChanged; 
+
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        
+        try {
+            const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+            const app = initializeApp(firebaseConfig);
+            window.db = getFirestore(app);
+            window.auth = getAuth(app);
+            setLogLevel('Debug');
+
+            // Authentication setup
+            onAuthStateChanged(window.auth, async (user) => {
+                if (user) {
+                    window.userId = user.uid;
+                } else {
+                    // Sign in anonymously if no custom token is provided
+                    try {
+                        await signInAnonymously(window.auth);
+                        window.userId = window.auth.currentUser.uid;
+                    } catch (error) {
+                        console.error("Anonymous sign-in failed:", error);
+                    }
+                }
+                window.isAuthReady = true;
+                console.log("Firebase Auth Ready. User ID:", window.userId);
+            });
+
+            // Use custom token if available (Canvas environment)
+            if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                signInWithCustomToken(window.auth, __initial_auth_token).catch((error) => {
+                    console.error("Custom Token Sign-In Failed:", error);
+                });
+            }
+
+            // Make Firestore functions available globally for the form handler
+            window.addDoc = addDoc;
+            window.collection = collection;
+            window.appId = appId;
+        } catch (e) {
+            console.error("Firebase Initialization Error:", e);
+        }
+    </script>
+
+    <style>
+        :root {
+            --color-deep-space: #050A19;
+            --color-dark-blue: #10172B;
+            --color-cyan: #06B6D4;
+            --color-violet: #A78BFA; /* Slightly brighter violet */
+            --color-white: #F8FAFC;
+        }
+
+        body {
+            font-family: 'Poppins', sans-serif;
+            /* Deeper gradient background */
+            background: radial-gradient(circle at top left, var(--color-dark-blue) 0%, var(--color-deep-space) 100%);
+            min-height: 100vh;
+            color: var(--color-white);
+            line-height: 1.75;
+        }
+
+        /* Glassmorphism Base Card Style */
+        .glass-card {
+            background-color: rgba(255, 255, 255, 0.03); /* bg-white/3 */
+            backdrop-filter: blur(15px); /* backdrop-blur-lg */
+            border: 1px solid rgba(167, 139, 250, 0.15); /* light violet border */
+            box-shadow: 0 4px 15px 0 rgba(0, 0, 0, 0.5);
+            border-radius: 16px;
+            transition: all 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
+        }
+
+        /* Neon Glow Hover Effect */
+        .neon-glow-hover:hover {
+            box-shadow: 0 0 15px var(--color-cyan), 0 0 25px var(--color-violet), 0 4px 30px rgba(0, 0, 0, 0.7);
+            transform: translateY(-4px) scale(1.02);
+        }
+
+        /* Skill Meter SVG Styling */
+        .meter-circle-bg {
+            stroke: rgba(255, 255, 255, 0.1);
+        }
+
+        .meter-circle-progress {
+            transform: rotate(-90deg);
+            transform-origin: 50% 50%;
+            transition: stroke-dashoffset 2s ease-out; /* Smooth fill animation */
+        }
+        
+        /* Custom scrollbar for aesthetics */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-thumb { background-color: var(--color-cyan); border-radius: 4px; }
+        ::-webkit-scrollbar-track { background-color: var(--color-deep-space); }
+
+        /* Animated Grid Background */
+        .grid-background {
+            background-image: linear-gradient(to right, rgba(167, 139, 250, 0.05) 1px, transparent 1px),
+                              linear-gradient(to bottom, rgba(167, 139, 250, 0.05) 1px, transparent 1px);
+            background-size: 50px 50px;
+            animation: moveGrid 60s linear infinite;
+        }
+
+        @keyframes moveGrid {
+            from { background-position: 0 0; }
+            to { background-position: 50px 50px; }
+        }
+
+    </style>
+</head>
+
+<body class="antialiased text-gray-100">
+
+    <!-- AOS Initialization -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/aos/2.3.4/aos.js"></script>
+    <script>
+        // --- Shared element variables and helper functions
+        let contactForm, submitButton, messageContainer;
+
+        // Helper to display dynamic messages (Success/Error)
+        const displayMessage = (text, isError = false) => {
+            if (!messageContainer) return; 
+
+            messageContainer.textContent = text;
+            messageContainer.classList.remove('hidden', 'text-cyan-400', 'text-red-400');
+            messageContainer.classList.add(isError ? 'text-red-400' : 'text-cyan-400');
+            
+            // Show the message for 5 seconds
+            setTimeout(() => {
+                messageContainer.classList.add('hidden');
+            }, 5000);
+        };
+
+        // --- Contact Form Submission Logic (Firestore) ---
+        const handleSubmit = async (event) => {
+            event.preventDefault();
+            
+            if (!submitButton) return;
+            
+            submitButton.disabled = true;
+            submitButton.textContent = 'Sending Data Stream...';
+
+            if (!window.isAuthReady) {
+                displayMessage("Authentication is still setting up. Please wait a moment and try again.", true);
+                submitButton.disabled = false;
+                submitButton.textContent = 'Send Message';
+                return;
+            }
+
+            const formData = new FormData(contactForm);
+            const data = {
+                name: formData.get('name'),
+                email: formData.get('email'),
+                message: formData.get('message'),
+                timestamp: new Date()
+            };
+
+            try {
+                // Using the required public data path structure
+                const collectionRef = window.collection(window.db, `artifacts/${window.appId}/public/data/contact_messages`);
+                await window.addDoc(collectionRef, data);
+                
+                displayMessage("Message received! Connection established successfully.", false);
+                contactForm.reset();
+            } catch (error) {
+                console.error("Error submitting contact form:", error);
+                displayMessage("Transmission failed. Check console for integrity errors.", true);
+            } finally {
+                submitButton.disabled = false;
+                submitButton.textContent = 'Send Message';
+            }
+        };
+
+
+        document.addEventListener('DOMContentLoaded', () => {
+            // FIX: Removed 'once: true' so animations trigger every time a section scrolls into view.
+            AOS.init({
+                duration: 1000,
+                // once: true, // This line was removed
+                easing: 'ease-in-out',
+            });
+            
+            // Link DOM elements
+            contactForm = document.getElementById('contact-form');
+            submitButton = document.getElementById('submit-btn');
+            messageContainer = document.getElementById('message-container');
+
+            // Attach form listener
+            if (contactForm) {
+                contactForm.addEventListener('submit', handleSubmit);
+            }
+
+            // --- Navigation and Smooth Scroll ---
+            const nav = document.getElementById('navbar');
+            const sections = document.querySelectorAll('section[id]');
+            const navItems = document.getElementById('nav-menu').children;
+
+            const handleScroll = () => {
+                // Sticky Nav Bar styling
+                if (window.scrollY > 50) {
+                    nav.classList.add('glass-card', 'shadow-2xl', 'bg-slate-900/70', 'py-3');
+                    nav.classList.remove('py-4');
+                } else {
+                    nav.classList.remove('glass-card', 'shadow-2xl', 'bg-slate-900/70', 'py-3');
+                    nav.classList.add('py-4');
+                }
+
+                // Active Menu Highlight
+                let current = '';
+                sections.forEach(section => {
+                    const sectionTop = section.offsetTop - 150; // Offset adjusted for smoother switching
+                    if (window.scrollY >= sectionTop) {
+                        current = section.getAttribute('id');
+                    }
+                });
+
+                Array.from(navItems).forEach(item => {
+                    item.classList.remove('text-cyan-400', 'border-b-2', 'border-cyan-400');
+                    if (item.getAttribute('href').substring(1) === current) {
+                        item.classList.add('text-cyan-400', 'border-b-2', 'border-cyan-400');
+                    }
+                });
+            };
+
+            window.addEventListener('scroll', handleScroll);
+            handleScroll(); // Initial check
+
+            // --- Typewriter Effect ---
+            const phrases = [
+                "Data Visualization | Dashboard Design",
+                "SQL & Python | Storytelling with Data",
+                "Machine Learning Basics | Business Intelligence"
+            ];
+            const typewriterElement = document.getElementById('typewriter-text');
+            let phraseIndex = 0;
+            let charIndex = 0;
+            let isDeleting = false;
+            let delay = 150;
+
+            const type = () => {
+                const currentPhrase = phrases[phraseIndex];
+                if (isDeleting) {
+                    typewriterElement.textContent = currentPhrase.substring(0, charIndex--);
+                    delay = 50;
+                } else {
+                    typewriterElement.textContent = currentPhrase.substring(0, charIndex++);
+                    delay = 150;
+                }
+
+                if (!isDeleting && charIndex === currentPhrase.length + 1) {
+                    isDeleting = true;
+                    delay = 2000; // Pause at end of typing
+                } else if (isDeleting && charIndex === 0) {
+                    isDeleting = false;
+                    phraseIndex = (phraseIndex + 1) % phrases.length;
+                    delay = 500; // Pause at end of deleting
+                }
+
+                setTimeout(type, delay);
+            };
+
+            type(); // Start the typewriter effect
+
+            // --- Skill Meter Animation Logic (using Intersection Observer) ---
+            const animateSkill = (circle, percent) => {
+                const radius = circle.r.baseVal.value;
+                const circumference = 2 * Math.PI * radius;
+                circle.style.strokeDasharray = `${circumference} ${circumference}`;
+                
+                // Calculate offset for the percentage
+                const offset = circumference - (percent / 100) * circumference;
+                circle.style.strokeDashoffset = offset;
+            };
+
+            const skillsObserver = new IntersectionObserver((entries, observer) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        const skillCard = entry.target;
+                        const circle = skillCard.querySelector('.meter-circle-progress');
+                        const percent = parseInt(skillCard.getAttribute('data-percent'), 10);
+                        // Only animate the meter if it hasn't been animated (reset is complex, so we check if offset is 0)
+                        // Note: The visibility check handles the re-entry animation when 'once' is false.
+                        animateSkill(circle, percent);
+                    }
+                });
+            }, {
+                root: null, // viewport
+                rootMargin: '0px',
+                threshold: 0.5 // Trigger when 50% of the element is visible
+            });
+
+            document.querySelectorAll('.skill-card-container').forEach(card => {
+                skillsObserver.observe(card);
+            });
+        });
+    </script>
+    
+
+    <!-- Floating Background Grid Layer (New Aesthetic Feature) -->
+    <div class="fixed inset-0 z-0 overflow-hidden pointer-events-none grid-background">
+        <!-- Floating dots/particles for depth -->
+        <div class="dot w-2 h-2 rounded-full bg-cyan-400 opacity-20 absolute top-[10%] left-[20%] animate-pulse"></div>
+        <div class="dot w-3 h-3 rounded-full bg-violet-400 opacity-25 absolute top-[40%] right-[15%] animate-pulse animation-delay-500"></div>
+        <div class="dot w-4 h-4 rounded-full bg-cyan-400 opacity-15 absolute bottom-[25%] left-[5%] animate-pulse animation-delay-1000"></div>
+        <div class="dot w-2 h-2 rounded-full bg-violet-400 opacity-30 absolute bottom-[5%] right-[30%] animate-pulse animation-delay-1500"></div>
+    </div>
+    
+    <!-- Navigation Bar -->
+    <nav id="navbar" class="sticky top-0 z-50 transition-all duration-300 py-4 px-6 md:px-12 backdrop-blur-md">
+        <div class="max-w-7xl mx-auto flex justify-between items-center">
+            <a href="#hero" class="text-2xl font-bold tracking-widest text-white hover:text-cyan-400 transition-colors">T.S. <span class="text-sm font-light text-violet-400">/DATA</span></a>
+            <div class="hidden md:flex space-x-8" id="nav-menu">
+                <!-- Links will be styled dynamically via JS 'handleScroll' -->
+                <a href="#hero" class="text-sm uppercase font-medium hover:text-cyan-400 transition-colors tracking-wider py-1">Home</a>
+                <a href="#about" class="text-sm uppercase font-medium hover:text-cyan-400 transition-colors tracking-wider py-1">About</a>
+                <a href="#skills" class="text-sm uppercase font-medium hover:text-cyan-400 transition-colors tracking-wider py-1">Skills</a>
+                <a href="#projects" class="text-sm uppercase font-medium hover:text-cyan-400 transition-colors tracking-wider py-1">Projects</a>
+                <a href="#contact" class="text-sm uppercase font-medium hover:text-cyan-400 transition-colors tracking-wider py-1">Contact</a>
+            </div>
+        </div>
+    </nav>
+
+    <main class="relative z-10">
+        
+        <!-- 1. Hero Section -->
+        <section id="hero" class="max-w-7xl mx-auto min-h-[90vh] flex items-center justify-center pt-24 pb-16 px-6 md:px-12">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
+                <!-- Text Content -->
+                <div data-aos="fade-right">
+                    <p class="text-xl text-violet-400 mb-2 font-light tracking-widest">INITIATE CONNECTION / ACCESS GRANTED</p>
+                    <h1 class="text-5xl md:text-7xl font-extrabold leading-tight mb-4">
+                        Tanjib Sadat <span class="text-cyan-400">| Analyst</span>
+                    </h1>
+                    <p class="text-2xl mb-8 font-light text-gray-300">
+                        Translating Complex Data Streams into **Actionable Business Intelligence**.
+                    </p>
+                    <div class="h-8 mb-10">
+                        <span id="typewriter-text" class="text-xl font-mono text-violet-400 border-r-2 border-cyan-400/80"></span>
+                    </div>
+
+                    <div class="flex flex-col sm:flex-row space-y-4 sm:space-y-0 sm:space-x-4">
+                        <a href="#projects" class="group px-8 py-3 text-lg font-bold rounded-full bg-cyan-600 text-white shadow-lg shadow-cyan-500/50 hover:bg-cyan-700 transition-all duration-300 transform hover:scale-105 hover:shadow-cyan-400/70">
+                            <span class="inline-block transition-transform group-hover:translate-x-1">🔍 View Projects</span>
+                        </a>
+                        <a href="#" class="px-8 py-3 text-lg font-semibold rounded-full glass-card hover:bg-white/10 transition-all duration-300 border-violet-400/30 neon-glow-hover">
+                            📄 Download CV
+                        </a>
+                    </div>
+                </div>
+
+               <!-- Avatar/Image -->
+<div data-aos="fade-left" class="flex justify-center md:justify-end">
+    <div class="relative w-72 h-72 md:w-96 md:h-96 rounded-full glass-card p-4 transition-all duration-700 hover:shadow-cyan-500/50 hover:shadow-2xl">
+        <!-- Circular image frame -->
+        <div class="w-full h-full rounded-full flex items-center justify-center overflow-hidden border-2 border-cyan-400/20">
+            <!-- Your Image -->
+            <img src="Profile.jpg.jpg" alt="Profile Picture" class="w-full h-full object-cover rounded-full">
+        </div>
+    </div>
+</div>
+
+        </section>
+
+        <!-- Main Content Wrapper -->
+        <div class="max-w-7xl mx-auto px-6 md:px-12 py-16 space-y-32">
+
+            <!-- 2. About Section -->
+            <section id="about">
+                <h2 data-aos="fade-down" class="text-4xl font-bold mb-10 text-center text-cyan-400 tracking-wider uppercase border-b-2 border-violet-400/20 inline-block px-4 pb-2 mx-auto">About Me</h2>
+                <div class="glass-card p-8 md:p-12 shadow-inner shadow-black/30" data-aos="fade-up">
+                    <div class="text-lg space-y-6">
+                        <p>
+                            I'm <span class="text-cyan-400 font-bold">Tanjib Sadat</span>, an aspiring Data Analyst fusing quantitative background in Mathematics with practical application. My mission is to transform complex datasets into clear, actionable business insights that drive strategic growth.
+                        </p>
+                        <p>
+                            My approach is meticulous, focusing on data quality, integrity, and powerful <span class="text-violet-400 font-semibold">visualization storytelling</span>. I thrive on extracting patterns and delivering simplified narratives from chaos.
+                        </p>
+                        <div class="flex flex-wrap gap-4 pt-4">
+                            <span class="inline-flex items-center px-4 py-2 rounded-full text-sm font-medium bg-violet-500/30 text-violet-300 border border-violet-500 transition-all duration-300 hover:bg-violet-500/50">
+                                📊 Power BI & Tableau
+                            </span>
+                            <span class="inline-flex items-center px-4 py-2 rounded-full text-sm font-medium bg-cyan-500/30 text-cyan-300 border border-cyan-500 transition-all duration-300 hover:bg-cyan-500/50">
+                                💾 Advanced SQL
+                            </span>
+                            <span class="inline-flex items-center px-4 py-2 rounded-full text-sm font-medium bg-violet-500/30 text-violet-300 border border-violet-500 transition-all duration-300 hover:bg-violet-500/50">
+                                🐍 Python (Pandas/Matplotlib/Scikit)
+                            </span>
+                            <span class="inline-flex items-center px-4 py-2 rounded-full text-sm font-medium bg-cyan-500/30 text-cyan-300 border border-cyan-500 transition-all duration-300 hover:bg-cyan-500/50">
+                                🧮 Data Modeling
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 3. Skills Section - Circular Meters -->
+            <section id="skills">
+                <h2 data-aos="fade-down" class="text-4xl font-bold mb-10 text-center text-cyan-400 tracking-wider uppercase border-b-2 border-violet-400/20 inline-block px-4 pb-2 mx-auto">Technical Toolkit</h2>
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-8">
+                    
+                    <!-- Skill: Excel (90%) -->
+                    <div class="skill-card-container glass-card neon-glow-hover p-6 flex flex-col items-center text-center" data-aos="zoom-in" data-aos-delay="100" data-percent="90">
+                        <div class="relative w-28 h-28">
+                            <svg class="w-full h-full" viewBox="0 0 100 100">
+                                <!-- Background Circle -->
+                                <circle class="meter-circle-bg" cx="50" cy="50" r="45" stroke-width="8" fill="none"></circle>
+                                <!-- Progress Circle (Circumference: 2 * PI * 45 ≈ 282.74) -->
+                                <circle class="meter-circle-progress" cx="50" cy="50" r="45" stroke="var(--color-cyan)" stroke-width="8" fill="none"
+                                    style="stroke-dashoffset: 28.274;"></circle>
+                            </svg>
+                            <span class="absolute inset-0 flex items-center justify-center text-2xl font-bold text-cyan-400">90%</span>
+                        </div>
+                        <h3 class="mt-4 text-xl font-semibold">Excel/VBA</h3>
+                    </div>
+
+                    <!-- Skill: Power BI (85%) -->
+                    <div class="skill-card-container glass-card neon-glow-hover p-6 flex flex-col items-center text-center" data-aos="zoom-in" data-aos-delay="200" data-percent="85">
+                        <div class="relative w-28 h-28">
+                            <svg class="w-full h-full" viewBox="0 0 100 100">
+                                <circle class="meter-circle-bg" cx="50" cy="50" r="45" stroke-width="8" fill="none"></circle>
+                                <circle class="meter-circle-progress" cx="50" cy="50" r="45" stroke="var(--color-violet)" stroke-width="8" fill="none"
+                                    style="stroke-dashoffset: 42.411;"></circle>
+                            </svg>
+                            <span class="absolute inset-0 flex items-center justify-center text-2xl font-bold text-violet-400">85%</span>
+                        </div>
+                        <h3 class="mt-4 text-xl font-semibold">Power BI/Tableau</h3>
+                    </div>
+                    
+                    <!-- Skill: SQL (80%) -->
+                    <div class="skill-card-container glass-card neon-glow-hover p-6 flex flex-col items-center text-center" data-aos="zoom-in" data-aos-delay="300" data-percent="80">
+                        <div class="relative w-28 h-28">
+                            <svg class="w-full h-full" viewBox="0 0 100 100">
+                                <circle class="meter-circle-bg" cx="50" cy="50" r="45" stroke-width="8" fill="none"></circle>
+                                <circle class="meter-circle-progress" cx="50" cy="50" r="45" stroke="var(--color-cyan)" stroke-width="8" fill="none"
+                                    style="stroke-dashoffset: 56.548;"></circle>
+                            </svg>
+                            <span class="absolute inset-0 flex items-center justify-center text-2xl font-bold text-cyan-400">80%</span>
+                        </div>
+                        <h3 class="mt-4 text-xl font-semibold">SQL Databases</h3>
+                    </div>
+
+                    <!-- Skill: Python (75%) -->
+                    <div class="skill-card-container glass-card neon-glow-hover p-6 flex flex-col items-center text-center" data-aos="zoom-in" data-aos-delay="400" data-percent="75">
+                        <div class="relative w-28 h-28">
+                            <svg class="w-full h-full" viewBox="0 0 100 100">
+                                <circle class="meter-circle-bg" cx="50" cy="50" r="45" stroke-width="8" fill="none"></circle>
+                                <circle class="meter-circle-progress" cx="50" cy="50" r="45" stroke="var(--color-violet)" stroke-width="8" fill="none"
+                                    style="stroke-dashoffset: 70.685;"></circle>
+                            </svg>
+                            <span class="absolute inset-0 flex items-center justify-center text-2xl font-bold text-violet-400">75%</span>
+                        </div>
+                        <h3 class="mt-4 text-xl font-semibold">Python (Data Science)</h3>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 4. Projects Section -->
+            <section id="projects">
+                <h2 data-aos="fade-down" class="text-4xl font-bold mb-10 text-center text-cyan-400 tracking-wider uppercase border-b-2 border-violet-400/20 inline-block px-4 pb-2 mx-auto">Featured Projects</h2>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-10">
+
+                    <!-- Project Card 1 -->
+                    <div class="group glass-card p-6 flex flex-col space-y-4 shadow-xl shadow-black/20 neon-glow-hover" data-aos="fade-up" data-aos-delay="100">
+                        <div class="text-5xl text-cyan-400 mb-2 transform group-hover:scale-105 transition-transform duration-300">📊</div>
+                        <h3 class="text-2xl font-semibold text-white">Streaming Trend Analysis</h3>
+                        <p class="text-gray-300 text-sm flex-grow">
+                            Extensive analysis of streaming platform content using advanced **SQL queries**, culminating in an interactive Power BI dashboard for trend identification and content strategy recommendations.
+                        </p>
+                        <div class="flex flex-wrap gap-2 text-xs">
+                            <span class="px-3 py-1 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-400/50">SQL</span>
+                            <span class="px-3 py-1 rounded-full bg-violet-500/20 text-violet-300 border border-violet-400/50">Power BI</span>
+                            <span class="px-3 py-1 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-400/50">Dashboarding</span>
+                        </div>
+                        <a href="#" class="mt-4 self-start px-4 py-2 text-sm font-medium rounded-lg border border-cyan-400 text-cyan-400 hover:bg-cyan-600/30 hover:text-white transition-all duration-300">
+                            View Report
+                        </a>
+                    </div>
+
+                    <!-- Project Card 2 -->
+                    <div class="group glass-card p-6 flex flex-col space-y-4 shadow-xl shadow-black/20 neon-glow-hover" data-aos="fade-up" data-aos-delay="200">
+                        <div class="text-5xl text-violet-400 mb-2 transform group-hover:scale-105 transition-transform duration-300">📈</div>
+                        <h3 class="text-2xl font-semibold text-white">E-commerce Sales Forecaster</h3>
+                        <p class="text-gray-300 text-sm flex-grow">
+                            Developed a dynamic sales tracking and forecasting model in **Python (Scikit-learn)** for quarterly performance predictions, improving inventory planning accuracy by 15%.
+                        </p>
+                        <div class="flex flex-wrap gap-2 text-xs">
+                            <span class="px-3 py-1 rounded-full bg-violet-500/20 text-violet-300 border border-violet-400/50">Python</span>
+                            <span class="px-3 py-1 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-400/50">Modeling</span>
+                            <span class="px-3 py-1 rounded-full bg-violet-500/20 text-violet-300 border border-violet-400/50">Forecasting</span>
+                        </div>
+                        <a href="#" class="mt-4 self-start px-4 py-2 text-sm font-medium rounded-lg border border-cyan-400 text-cyan-400 hover:bg-cyan-600/30 hover:text-white transition-all duration-300">
+                            View Notebook
+                        </a>
+                    </div>
+
+                    <!-- Project Card 3 -->
+                    <div class="group glass-card p-6 flex flex-col space-y-4 shadow-xl shadow-black/20 neon-glow-hover" data-aos="fade-up" data-aos-delay="300">
+                        <div class="text-5xl text-cyan-400 mb-2 transform group-hover:scale-105 transition-transform duration-300">🚗</div>
+                        <h3 class="text-2xl font-semibold text-white">Geospatial Demand Mapping</h3>
+                        <p class="text-gray-300 text-sm flex-grow">
+                            Cleaned and transformed large-scale ride-share data using **Power Query/M**, visualizing key geospatial metrics like peak hours and demand hotspots in Tableau.
+                        </p>
+                        <div class="flex flex-wrap gap-2 text-xs">
+                            <span class="px-3 py-1 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-400/50">Power Query</span>
+                            <span class="px-3 py-1 rounded-full bg-violet-500/20 text-violet-300 border border-violet-400/50">Tableau</span>
+                            <span class="px-3 py-1 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-400/50">Geospatial</span>
+                        </div>
+                        <a href="#" class="mt-4 self-start px-4 py-2 text-sm font-medium rounded-lg border border-cyan-400 text-cyan-400 hover:bg-cyan-600/30 hover:text-white transition-all duration-300">
+                            View Dashboard
+                        </a>
+                    </div>
+
+                </div>
+            </section>
+
+            <!-- 5. Contact Section -->
+            <section id="contact">
+                <h2 data-aos="fade-down" class="text-4xl font-bold mb-10 text-center text-cyan-400 tracking-wider uppercase border-b-2 border-violet-400/20 inline-block px-4 pb-2 mx-auto">Initiate Contact Protocol</h2>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-10">
+                    
+                    <!-- Contact Form -->
+                    <div class="glass-card p-8 md:p-10 shadow-inner shadow-black/30" data-aos="fade-right">
+                        <form id="contact-form" class="space-y-6">
+                            
+                            <!-- Success/Error Message Container -->
+                            <p id="message-container" class="hidden text-center font-medium transition-all duration-300"></p>
+
+                            <!-- Custom Input Styling (Focus Glow) -->
+                            <style>
+                                .contact-input {
+                                    @apply w-full px-4 py-3 glass-card bg-slate-800/50 border-white/20 focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/50 outline-none rounded-lg transition-all duration-300;
+                                }
+                                .contact-input:focus {
+                                    box-shadow: 0 0 10px rgba(6, 182, 212, 0.5); /* Cyan glow on focus */
+                                }
+                            </style>
+
+                            <div>
+                                <label for="name" class="block text-sm font-medium text-gray-300 mb-2">Name / Entity ID</label>
+                                <input type="text" id="name" name="name" required placeholder="Your designation" class="contact-input">
+                            </div>
+
+                            <div>
+                                <label for="email" class="block text-sm font-medium text-gray-300 mb-2">Secure Channel Email</label>
+                                <input type="email" id="email" name="email" required placeholder="name@domain.com" class="contact-input">
+                            </div>
+
+                            <div>
+                                <label for="message" class="block text-sm font-medium text-gray-300 mb-2">Transmission Message</label>
+                                <textarea id="message" name="message" rows="4" required placeholder="Query details..." class="contact-input"></textarea>
+                            </div>
+
+                            <button id="submit-btn" type="submit"
+                                class="w-full px-6 py-3 text-lg font-bold rounded-lg bg-violet-600 text-white shadow-lg shadow-violet-500/50 hover:bg-violet-700 transition-all duration-300 transform hover:scale-[1.01] hover:shadow-violet-400/70 disabled:opacity-50 disabled:shadow-none">
+                                Send Message
+                            </button>
+                        </form>
+                    </div>
+
+                    <!-- Social Media Links -->
+                    <div class="flex flex-col justify-center space-y-8" data-aos="fade-left">
+                        
+                        <a href="https://linkedin.com/in/tanjibsadat" target="_blank" class="glass-card p-6 flex items-center space-x-4 neon-glow-hover group">
+                            <svg class="w-8 h-8 text-cyan-400 transition-transform duration-300 group-hover:scale-110" fill="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M20 20h-3v-7.98c0-.98-.82-1.63-1.8-1.63s-1.8.65-1.8 1.63V20h-3V10h3v1.89c.47-.79 1.43-1.39 2.58-1.39 2.76 0 3.72 1.8 3.72 4.41V20zM7 8.5C5.89 8.5 5 7.61 5 6.5S5.89 4.5 7 4.5 9 5.39 9 6.5 8.11 8.5 7 8.5zm-1.5 11h3V10h-3v9.5z" stroke="currentColor" stroke-width="0.5" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+                            <span class="text-xl font-medium">LinkedIn/tanjibsadat</span>
+                        </a>
+
+                        <a href="https://github.com/tanjibsadat" target="_blank" class="glass-card p-6 flex items-center space-x-4 neon-glow-hover group">
+                            <svg class="w-8 h-8 text-violet-400 transition-transform duration-300 group-hover:scale-110" fill="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" d="M12 2C6.477 2 2 6.477 2 12c0 4.418 2.868 8.163 6.839 9.48.5.092.682-.218.682-.483 0-.237-.008-.867-.013-1.703-2.782.603-3.375-1.34-3.375-1.34-.454-1.152-1.11-1.46-1.11-1.46-.909-.623.069-.611.069-.611 1.006.071 1.535 1.032 1.535 1.77 0 .809.521 1.492 1.218 1.85.077.008.232.02.358.02.128 0 .463-.046.857-.123-2.181-.247-4.484-1.09-4.484-4.84 0-1.07.382-1.948 1.004-2.636-.101-.248-.435-1.248.096-2.584 0 0 .819-.264 2.68.995.776-.216 1.595-.323 2.41-.328.815.005 1.634.112 2.41.328 1.861-1.259 2.68-1 2.68-1 .531 1.336.197 2.336.096 2.584.622.688 1.004 1.566 1.004 2.636 0 3.758-2.304 4.59-4.492 4.838.356.308.674.918.674 1.852 0 1.335-.012 2.414-.012 2.748 0 .267.18.579.688.481C19.135 20.16 22 16.418 22 12c0-5.523-4.477-10-10-10z" clip-rule="evenodd" stroke="currentColor" stroke-width="0.5" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+                            <span class="text-xl font-medium">GitHub/tanjibsadat</span>
+                        </a>
+
+                        <a href="mailto:contact@tanjibsadat.com" class="glass-card p-6 flex items-center space-x-4 neon-glow-hover group">
+                            <svg class="w-8 h-8 text-cyan-400 transition-transform duration-300 group-hover:scale-110" fill="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M12 12.713l-11.75 7.464V6.157L12 13.911l11.75-7.754v14.02L12 12.713zm0-3.328l11.75-7.754H.25L12 9.385z" stroke="currentColor" stroke-width="0.5" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+                            <span class="text-xl font-medium">contact@tanjibsadat.com</span>
+                        </a>
+                    </div>
+                </div>
+            </section>
+        </div>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="mt-20 py-8 glass-card border-t border-violet-400/20">
+        <div class="max-w-7xl mx-auto text-center text-sm text-gray-400">
+            <p>&copy; 2025 Tanjib Sadat | Data Analyst Portfolio</p>
+            <p class="mt-1">
+                <span class="font-mono text-xs opacity-50">Authorized User ID: <span id="display-user-id" class="text-violet-300">Loading...</span></span>
+            </p>
+        </div>
+    </footer>
+
+    <!-- Back to Top Button -->
+    <a href="#hero" class="fixed bottom-6 right-6 p-3 rounded-full bg-cyan-600/80 text-white shadow-lg shadow-cyan-500/50 hover:bg-cyan-700 transition-all duration-300 transform hover:scale-110 pulse-animation z-40">
+        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18"></path></svg>
+    </a>
+
+    <!-- Additional JS for Footer Display & Animations -->
+    <script>
+        // Display the user ID in the footer once authenticated
+        if (window.onAuthStateChanged && window.auth) {
+            window.onAuthStateChanged(window.auth, (user) => {
+                const userIdDisplay = document.getElementById('display-user-id');
+                if (user && userIdDisplay) {
+                    userIdDisplay.textContent = user.uid;
+                } else if (userIdDisplay) {
+                    userIdDisplay.textContent = window.userId || 'Anonymous Access';
+                }
+            });
+        }
+
+        // CSS pulse animation for Back to Top button
+        const style = document.createElement('style');
+        style.innerHTML = `
+            @keyframes pulse {
+                0% { box-shadow: 0 0 0 0 rgba(6, 182, 212, 0.7); }
+                70% { box-shadow: 0 0 0 10px rgba(6, 182, 212, 0); }
+                100% { box-shadow: 0 0 0 0 rgba(6, 182, 212, 0); }
+            }
+            .pulse-animation {
+                animation: pulse 2s infinite;
+            }
+        `;
+        document.head.appendChild(style);
+    </script>
+</body>
+</html>
